@@ -1,0 +1,1386 @@
+---
+title: "Analisis Performa Film, Segmentasi Pelanggan, dan Pemodelan Revenue pada Database Sakila"
+author: "Nadia Atikah Dewi"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    code_folding: hide
+    df_print: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE,
+  warning    = FALSE,
+  message    = FALSE,
+  fig.align  = "center",
+  fig.width  = 9,
+  fig.height = 5.5,
+  dpi        = 150,
+  out.width  = "100%"
+)
+```
+
+```{r inject-css, echo=FALSE, results='asis'}
+cat('
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/* ── BODY & TYPOGRAPHY ─────────────────────────────── */
+body {
+  font-family: "Inter", sans-serif;
+  font-size: 16px !important;
+  line-height: 1.85;
+  color: #1e293b;
+  background-color: #f1f5f9;
+}
+h1, h2, h3, h4 {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  color: #0f172a;
+}
+h1.title {
+  font-size: 2rem;
+  border-bottom: 4px solid #1d4ed8;
+  padding-bottom: 14px;
+  margin-bottom: 6px;
+}
+h4.author, h4.date { color: #64748b; font-weight: 400; font-size: 0.95rem; }
+h1 { font-size: 1.65rem; margin-top: 2.8rem; border-left: 5px solid #1d4ed8; padding-left: 14px; }
+h2 { font-size: 1.3rem; margin-top: 2rem; border-left: 4px solid #93c5fd; padding-left: 12px; color: #1e3a8a; }
+h3 { font-size: 1.05rem; margin-top: 1.6rem; color: #334155; }
+p  { text-align: justify; }
+hr { border: none; border-top: 2px solid #e2e8f0; margin: 40px 0; }
+
+/* ── CONTAINER ─────────────────────────────────────── */
+.main-container {
+  max-width: 1080px;
+  margin: auto;
+  padding: 36px 48px;
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 6px 36px rgba(0,0,0,0.08);
+}
+
+/* ── CODE ──────────────────────────────────────────── */
+pre, code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.84rem;
+  border-radius: 6px;
+}
+pre {
+  border-left: 4px solid #1d4ed8;
+  padding: 14px 18px;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+/* ── CALLOUT BOXES ─────────────────────────────────── */
+
+
+/* ── STAT CARDS ────────────────────────────────────── */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 18px; margin: 28px 0; }
+.stat-card { background: linear-gradient(135deg, #1d4ed8, #1e40af); color: white; border-radius: 14px; padding: 24px 18px; text-align: center; box-shadow: 0 4px 16px rgba(29,78,216,0.28); }
+.stat-card.green  { background: linear-gradient(135deg, #16a34a, #15803d); box-shadow: 0 4px 16px rgba(22,163,74,0.28); }
+.stat-card.slate  { background: linear-gradient(135deg, #475569, #334155); box-shadow: 0 4px 16px rgba(71,85,105,0.28); }
+.stat-card.indigo { background: linear-gradient(135deg, #6366f1, #4338ca); box-shadow: 0 4px 16px rgba(99,102,241,0.28); }
+.stat-card.rose   { background: linear-gradient(135deg, #e11d48, #be123c); box-shadow: 0 4px 16px rgba(225,29,72,0.28); }
+.stat-card .stat-value { font-size: 1.9rem; font-weight: 700; margin-bottom: 6px; }
+.stat-card .stat-label { font-size: 0.74rem; opacity: 0.9; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; }
+
+/* ── SECTION INTRO ─────────────────────────────────── */
+.section-intro { background: #f8fafc; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; font-size: 1rem; color: #334155; border: 1px solid #e2e8f0; line-height: 1.85; }
+
+/* kableExtra header - CSS approach, no inline style injection */
+.table > thead > tr > th {
+  background-color: #1e3a8a !important;
+  color: white !important;
+  font-weight: 600;
+  padding: 12px 15px !important;
+  border-color: #1e3a8a !important;
+  font-size: 1rem !important;
+}
+.table > tbody > tr > td { padding: 10px 15px !important; vertical-align: middle !important; font-size: 1rem !important; }
+.table-striped > tbody > tr:nth-of-type(odd)  { background-color: #f8fafc !important; }
+.table-hover > tbody > tr:hover { background-color: #eff6ff !important; }
+
+/* ── MARKDOWN TABLES (non-kableExtra) ──────────────── */
+/* Hanya menyasar tabel murni markdown di dalam konten */
+.main-container > .section > table,
+div.section > table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.875rem;
+  margin: 16px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+div.section > table thead tr { background-color: #1e3a8a !important; color: white !important; }
+div.section > table th { padding: 11px 14px; font-weight: 600; color: white !important; text-align: left; }
+div.section > table td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+div.section > table tr:nth-child(even) { background-color: #f8fafc; }
+div.section > table tr:hover { background-color: #eff6ff; }
+
+/* ── TOC SIDEBAR ───────────────────────────────────── */
+#TOC { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 22px; font-size: 1rem !important; line-height: 2.05; }
+#TOC a { color: #1d4ed8; text-decoration: none; font-size: 1rem !important; }
+#TOC a:hover { color: #1e3a8a; text-decoration: underline; }
+#TOC ul, #TOC li { font-size: 1rem !important; }
+.tocify-item { font-size: 1rem !important; }
+.tocify-subheader .tocify-item { font-size: 0.95rem !important; }
+
+/* Tombol toggle TOC */
+#toc-toggle-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 9999;
+  background: #1d4ed8;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(29,78,216,0.35);
+  transition: background 0.2s;
+  letter-spacing: 0.03em;
+}
+#toc-toggle-btn:hover { background: #1e3a8a; }
+
+/* State: sidebar hidden */
+body.toc-hidden .col-md-3 { display: none !important; }
+body.toc-hidden .col-md-9 { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; }
+body.toc-hidden #TOC       { display: none !important; }
+</style>
+
+<button id="toc-toggle-btn" onclick="toggleTOC()">☰ Sembunyikan Sidebar</button>
+
+<script>
+function toggleTOC() {
+  var body = document.body;
+  var btn  = document.getElementById("toc-toggle-btn");
+  if (body.classList.contains("toc-hidden")) {
+    body.classList.remove("toc-hidden");
+    btn.textContent = "☰ Sembunyikan Sidebar";
+  } else {
+    body.classList.add("toc-hidden");
+    btn.textContent = "☰ Tampilkan Sidebar";
+  }
+}
+</script>
+')
+```
+
+---
+
+# Pendahuluan
+
+## Latar Belakang
+
+Database **Sakila** merupakan basis data contoh (*sample database*) yang dirilis secara resmi oleh MySQL dan telah banyak digunakan dalam keperluan pembelajaran maupun penelitian di bidang analisis data. Database ini merepresentasikan sistem manajemen toko penyewaan film (*video rental store*) yang mencakup informasi mengenai film, inventaris, transaksi penyewaan, pembayaran, pelanggan, serta lokasi geografis pelanggan dari berbagai penjuru dunia.
+
+Dalam konteks bisnis penyewaan film, pemahaman mendalam terhadap faktor-faktor yang memengaruhi pendapatan (*revenue*) sangat diperlukan guna mendukung pengambilan keputusan strategis. Persoalan seperti penetapan tarif sewa yang optimal, identifikasi segmen pelanggan yang paling bernilai, hingga evaluasi performa antar kategori genre film merupakan pertanyaan bisnis yang dapat dijawab melalui pendekatan analisis data yang sistematis dan berbasis bukti.
+
+Laporan ini memanfaatkan database Sakila sebagai studi kasus untuk mengeksplorasi hubungan antar variabel, menguji perbedaan antar kelompok secara inferensial, melakukan segmentasi pelanggan berbasis perilaku, serta membangun model prediktif yang mampu menjelaskan dan memprediksi variasi revenue film secara komprehensif.
+
+## Tujuan Analisis
+
+Analisis ini bertujuan untuk:
+
+1. Melakukan eksplorasi dan statistik deskriptif terhadap data film beserta transaksinya.
+2. Menganalisis korelasi antar variabel numerik yang relevan.
+3. Menguji ada atau tidaknya perbedaan rata-rata revenue secara signifikan antar kategori genre film menggunakan ANOVA satu arah dan uji lanjut Tukey HSD.
+4. Menganalisis distribusi geografis pelanggan berdasarkan negara asal.
+5. Melakukan segmentasi pelanggan menggunakan algoritma K-Means Clustering dengan validasi jumlah klaster melalui Elbow Method dan Silhouette Method.
+6. Membangun model regresi linear berganda untuk memprediksi revenue film.
+7. Memvalidasi asumsi-asumsi klasik model regresi, meliputi normalitas residual, homoskedastisitas, dan multikolinearitas.
+
+## Metode Analisis
+
+| Metode | Tujuan |
+|---|---|
+| Statistik Deskriptif | Meringkas distribusi dan karakteristik data |
+| Analisis Korelasi Pearson | Mengukur kekuatan dan arah hubungan antar variabel numerik |
+| ANOVA One-Way | Menguji perbedaan rata-rata revenue antar kategori genre |
+| Tukey HSD | Uji perbandingan berganda (*post-hoc*) untuk mengidentifikasi pasangan kelompok yang berbeda signifikan |
+| Elbow Method | Menentukan jumlah klaster optimal berdasarkan penurunan WCSS |
+| Silhouette Method | Memvalidasi jumlah klaster berdasarkan kualitas separasi antar klaster |
+| K-Means Clustering | Pengelompokan pelanggan berdasarkan perilaku penyewaan dan pengeluaran |
+| Regresi Linear Berganda | Pemodelan prediktif revenue berdasarkan atribut film |
+| Uji Shapiro-Wilk | Pengujian normalitas distribusi residual |
+| Breusch-Pagan Test | Pengujian homoskedastisitas (kekonsistenan varians residual) |
+| Variance Inflation Factor (VIF) | Deteksi multikolinearitas antar variabel prediktor |
+
+---
+
+# Persiapan Data
+
+## Pemuatan Paket
+
+```{r library}
+library(DBI)
+library(RMySQL)
+library(dplyr)
+library(ggplot2)
+library(cluster)
+library(factoextra)
+library(corrplot)
+library(lmtest)
+library(car)
+library(knitr)
+library(kableExtra)
+library(tidyr)
+library(scales)
+```
+
+Seluruh paket yang digunakan mencakup keperluan koneksi database (`DBI`, `RMySQL`), manipulasi data (`dplyr`, `tidyr`), visualisasi (`ggplot2`, `corrplot`, `factoextra`), analisis klaster (`cluster`), pengujian asumsi regresi (`lmtest`, `car`), serta penyajian tabel (`knitr`, `kableExtra`, `scales`).
+
+## Koneksi Database dan Pembacaan Tabel
+
+```{r koneksi-baca, include=FALSE}
+con <- dbConnect(
+  RMySQL::MySQL(),
+  dbname   = "sakila",
+  host     = "localhost",
+  user     = "root",
+  password = "951230"
+)
+
+film          <- dbReadTable(con, "film")
+inventory     <- dbReadTable(con, "inventory")
+rental        <- dbReadTable(con, "rental")
+payment       <- dbReadTable(con, "payment")
+film_category <- dbReadTable(con, "film_category")
+category      <- dbReadTable(con, "category")
+customer      <- dbReadTable(con, "customer")
+address       <- dbReadTable(con, "address")
+city          <- dbReadTable(con, "city")
+country       <- dbReadTable(con, "country")
+```
+
+Koneksi ke database MySQL Sakila berhasil dilakukan menggunakan driver `RMySQL` melalui antarmuka `DBI`. Sepuluh tabel yang saling berelasi berhasil dibaca, masing-masing merepresentasikan entitas bisnis yang berbeda dan dihubungkan melalui kunci relasional (*foreign key*). Struktur relasional ini memungkinkan penggabungan data antar tabel untuk menghasilkan dataset analitik yang komprehensif.
+
+## Pembentukan Dataset Analitik Film
+
+```{r data-prep}
+df <- film %>%
+  inner_join(inventory,     by = "film_id") %>%
+  inner_join(rental,        by = "inventory_id") %>%
+  inner_join(payment,       by = "rental_id") %>%
+  inner_join(film_category, by = "film_id") %>%
+  inner_join(category,      by = "category_id") %>%
+  group_by(film_id, title, length, rental_rate, name) %>%
+  summarise(
+    total_rental = n(),
+    revenue      = sum(amount),
+    .groups      = "drop"
+  ) %>%
+  rename(category = name)
+```
+
+Data dari lima tabel utama digabungkan menggunakan serangkaian *inner join* berdasarkan kunci relasional masing-masing tabel. Hasil penggabungan kemudian diagregasi per film sehingga setiap baris merepresentasikan satu judul film beserta total transaksi dan akumulasi pendapatannya.
+
+```{r preview-df}
+head(df, 10) %>%
+  rename(
+    "Film ID"      = film_id,
+    "Judul"        = title,
+    "Durasi (mnt)" = length,
+    "Tarif Sewa"   = rental_rate,
+    "Kategori"     = category,
+    "Total Rental" = total_rental,
+    "Revenue"      = revenue
+  ) %>%
+  kable(
+    caption = "Tabel 1. Preview Dataset Analitik Film (10 Baris Pertama)",
+    digits  = 2
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width        = TRUE,
+    font_size         = 15
+  )
+```
+
+Dataset akhir memuat **`r nrow(df)` film** dari **`r n_distinct(df$category)` genre** dengan tujuh variabel analitik. Variabel `revenue` (ditampilkan dalam warna biru) merupakan variabel dependen utama dalam seluruh rangkaian analisis ini.
+
+| Variabel | Tipe | Keterangan |
+|---|---|---|
+| `film_id` | Numerik | Identifikasi unik setiap film |
+| `title` | Karakter | Judul film |
+| `length` | Numerik | Durasi film (menit) |
+| `rental_rate` | Numerik | Tarif sewa per transaksi (USD) — diskrit: \$0.99, \$2.99, \$4.99 |
+| `category` | Karakter | Genre atau kategori film (16 genre unik) |
+| `total_rental` | Integer | Jumlah total transaksi penyewaan yang tercatat |
+| `revenue` | Numerik | Total pendapatan yang dihasilkan film (USD) |
+
+---
+
+# Statistik Deskriptif
+
+
+
+> Statistik deskriptif memberikan gambaran awal mengenai sebaran, pemusatan, dan variasi data. Tahap ini penting untuk memahami karakteristik dasar setiap variabel sebelum analisis lebih lanjut dilakukan, sekaligus membantu mendeteksi kemungkinan adanya pencilan (*outlier*) atau distribusi yang tidak biasa.
+
+
+
+```{r summary-output}
+summary(df[, c("length", "rental_rate", "total_rental", "revenue")])
+```
+
+```{=html}
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">958</div>
+    <div class="stat-label">Total Film</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-value">$70.36</div>
+    <div class="stat-label">Rata-rata Revenue</div>
+  </div>
+  <div class="stat-card slate">
+    <div class="stat-value">16.75</div>
+    <div class="stat-label">Frekuensi Sewa Rata-rata</div>
+  </div>
+  <div class="stat-card indigo">
+    <div class="stat-value">$231.73</div>
+    <div class="stat-label">Revenue Tertinggi</div>
+  </div>
+</div>
+```
+
+Berdasarkan output `summary()`, diperoleh gambaran sebagai berikut:
+
+**Durasi Film (`length`):** Nilai berkisar antara 46 hingga 185 menit, dengan rata-rata 115,49 menit dan median 114 menit. Kedekatan antara rata-rata dan median menunjukkan bahwa distribusi durasi film relatif simetris tanpa kemiringan yang ekstrem.
+
+**Tarif Sewa (`rental_rate`):** Variabel ini hanya memiliki tiga nilai diskrit — \$0.99, \$2.99, dan \$4.99 — yang mencerminkan tiga tier harga yang ditetapkan oleh manajemen. Rata-rata sebesar \$2.977 menunjukkan distribusi film yang cukup proporsional di antara ketiga tier tersebut.
+
+**Total Penyewaan (`total_rental`):** Frekuensi penyewaan per film berkisar antara 4 hingga 34 kali. Rentang interkuartil (IQR) dari 11 hingga 22 kali menunjukkan bahwa sebagian besar film disewa dalam kisaran yang relatif normal, sementara nilai maksimum 34 kali mengindikasikan adanya film yang sangat populer di antara pelanggan.
+
+**Revenue:** Distribusi revenue menunjukkan kemiringan positif (*right-skewed*) yang ditandai oleh selisih antara rata-rata (\$70.36) dan median (\$62.32) sebesar \$8. Hal ini mengindikasikan bahwa sebagian kecil film menghasilkan revenue yang jauh di atas rata-rata — kemungkinan film-film dengan kombinasi tarif tinggi sekaligus frekuensi penyewaan yang tinggi.
+
+## Visualisasi Distribusi Revenue
+
+```{r hist-revenue, fig.cap="Gambar 1. Distribusi revenue per film. Garis merah menunjukkan nilai rata-rata ($70.36) dan garis biru menunjukkan median ($62.32). Selisih keduanya mencerminkan kemiringan positif pada distribusi."}
+ggplot(df, aes(x = revenue)) +
+  geom_histogram(
+    bins  = 35,
+    fill  = "#3b82f6",
+    color = "white",
+    alpha = 0.85
+  ) +
+  geom_vline(
+    xintercept = mean(df$revenue),
+    color = "#ef4444", linetype = "dashed", linewidth = 1.1
+  ) +
+  geom_vline(
+    xintercept = median(df$revenue),
+    color = "#1d4ed8", linetype = "dotted", linewidth = 1.1
+  ) +
+  annotate("text", x = mean(df$revenue) + 14, y = 70,
+           label = paste0("Mean = $", round(mean(df$revenue), 2)),
+           color = "#ef4444", size = 3.6, fontface = "bold") +
+  annotate("text", x = median(df$revenue) - 20, y = 70,
+           label = paste0("Median = $", round(median(df$revenue), 2)),
+           color = "#1d4ed8", size = 3.6, fontface = "bold") +
+  scale_x_continuous(labels = dollar_format()) +
+  labs(
+    title    = "Distribusi Revenue per Film",
+    subtitle = "Data mencakup 958 film dari 16 genre pada database Sakila",
+    x        = "Revenue (USD)",
+    y        = "Frekuensi"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(color = "#64748b", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 1:** Histogram memperlihatkan distribusi revenue yang tidak simetris — sebagian besar film menghasilkan revenue di bawah $100, sementara sebagian kecil mencapai angka di atas $150 hingga $231. Posisi rata-rata ($70.36) yang lebih tinggi dari median ($62.32) mengkonfirmasi adanya *positive skewness*, yang lazim ditemukan pada data revenue bisnis. Film-film dengan revenue tinggi kemungkinan besar adalah judul yang memiliki kombinasi tarif sewa premium sekaligus diminati banyak pelanggan, sehingga mengangkat nilai rata-rata ke atas. Pola distribusi seperti ini perlu diperhatikan dalam pemodelan regresi karena dapat memengaruhi asumsi normalitas residual.
+
+
+
+## Visualisasi Distribusi Total Penyewaan
+
+```{r hist-rental, fig.cap="Gambar 2. Distribusi frekuensi penyewaan per film. Distribusi mendekati simetris dengan puncak di sekitar 14-18 kali penyewaan per film."}
+ggplot(df, aes(x = total_rental)) +
+  geom_histogram(
+    bins  = 28,
+    fill  = "#22c55e",
+    color = "white",
+    alpha = 0.85
+  ) +
+  geom_vline(
+    xintercept = mean(df$total_rental),
+    color = "#ef4444", linetype = "dashed", linewidth = 1.1
+  ) +
+  annotate("text", x = mean(df$total_rental) + 2.5, y = 55,
+           label = paste0("Mean = ", round(mean(df$total_rental), 1), "x"),
+           color = "#ef4444", size = 3.6, fontface = "bold") +
+  labs(
+    title    = "Distribusi Frekuensi Penyewaan per Film",
+    subtitle = "Jumlah total transaksi penyewaan yang tercatat per judul film",
+    x        = "Total Penyewaan (kali)",
+    y        = "Frekuensi"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(color = "#64748b", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 2:** Berbeda dengan distribusi revenue, distribusi frekuensi penyewaan memperlihatkan bentuk yang jauh lebih mendekati distribusi normal dengan pusat sekitar 14–18 kali penyewaan. Rentang nilai dari 4 hingga 34 kali menunjukkan adanya variasi yang cukup substansial antar film. Film dengan frekuensi penyewaan sangat rendah ( 28 kali termasuk judul yang paling banyak dicari. Distribusi yang mendekati normal pada variabel ini menjadi pertanda baik untuk analisis regresi yang menggunakannya sebagai prediktor.
+
+
+
+---
+
+# Analisis Korelasi
+
+
+
+> Analisis korelasi Pearson digunakan untuk mengukur kekuatan dan arah hubungan linear antar variabel numerik. Koefisien korelasi ($r$) bernilai antara −1 dan +1, di mana nilai mendekati ±1 menunjukkan hubungan yang kuat, nilai mendekati 0 menunjukkan tidak adanya hubungan linear, dan tanda positif/negatif mencerminkan arah hubungan.
+
+
+
+## Matriks Korelasi
+
+```{r matriks-kor}
+numeric_df <- df %>%
+  select(length, rental_rate, total_rental, revenue)
+
+cor_matrix <- cor(numeric_df)
+
+round(cor_matrix, 4) %>%
+  kable(
+    caption = "Tabel 2. Matriks Korelasi Pearson Antar Variabel Numerik"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = FALSE,
+    font_size         = 15
+  ) %>%
+  column_spec(1, bold = TRUE)
+```
+
+## Visualisasi Corrplot
+
+```{r corrplot-viz, fig.width=6.5, fig.height=6, fig.cap="Gambar 3. Matriks korelasi dengan anotasi koefisien numerik. Intensitas warna biru mencerminkan kekuatan korelasi positif. Kotak putih atau mendekati putih menunjukkan korelasi mendekati nol."}
+corrplot(
+  cor_matrix,
+  method      = "color",
+  type        = "upper",
+  addCoef.col = "black",
+  number.cex  = 0.92,
+  tl.col      = "#1e293b",
+  tl.srt      = 45,
+  tl.cex      = 0.95,
+  cl.cex      = 0.85,
+  col         = colorRampPalette(c("#fef2f2", "#f8fafc", "#1d4ed8"))(200),
+  title       = "Matriks Korelasi — Variabel Numerik Film",
+  mar         = c(0, 0, 3, 0)
+)
+```
+
+
+
+**Interpretasi Gambar 3 dan Tabel 2:**
+
+**rental_rate ↔ revenue (r = 0.608):** Korelasi positif sedang-kuat. Setiap kenaikan satu tier tarif sewa secara konsisten dikaitkan dengan peningkatan revenue yang signifikan. Hal ini intuitif karena setiap transaksi pada film bertarif tinggi langsung menyumbang nilai lebih besar ke total pendapatan.
+
+**total_rental ↔ revenue (r = 0.645):** Korelasi positif sedang-kuat, bahkan sedikit lebih kuat dari `rental_rate`. Volume penyewaan yang lebih tinggi berarti lebih banyak transaksi yang terkumulasi, sehingga revenue terus bertambah secara proporsional.
+
+**length ↔ revenue (r = −0.004):** Korelasi mendekati nol — durasi film tidak memiliki hubungan linear yang berarti dengan revenue. Film panjang tidak selalu lebih menguntungkan dari film pendek maupun sebaliknya.
+
+**rental_rate ↔ total_rental (r = −0.053):** Korelasi negatif yang sangat lemah. Tarif yang lebih tinggi sedikit menekan frekuensi sewa, namun efeknya tidak substansial. Yang lebih penting, nilai yang rendah ini mengindikasikan kedua variabel hampir independen satu sama lain sehingga keduanya dapat dimasukkan bersama dalam model regresi tanpa risiko multikolinearitas.
+
+
+
+## Scatter Plot: Tarif Sewa vs Revenue
+
+```{r scatter-rate, fig.cap="Gambar 4. Hubungan antara tarif sewa dan revenue. Tiga kelompok titik yang terpisah jelas mencerminkan tiga tier tarif diskrit ($0.99, $2.99, $4.99), dengan garis regresi menunjukkan tren positif yang signifikan."}
+ggplot(df, aes(x = rental_rate, y = revenue)) +
+  geom_jitter(
+    alpha = 0.35, color = "#3b82f6",
+    width = 0.07, size  = 1.8
+  ) +
+  geom_smooth(
+    method = "lm", color = "#ef4444",
+    fill   = "#fecaca", se = TRUE, linewidth = 1.2
+  ) +
+  scale_x_continuous(
+    breaks = c(0.99, 2.99, 4.99),
+    labels = c("$0.99", "$2.99", "$4.99")
+  ) +
+  scale_y_continuous(labels = dollar_format()) +
+  labs(
+    title    = "Hubungan Tarif Sewa dan Revenue",
+    subtitle = "Bayangan merah = interval kepercayaan 95% garis regresi",
+    x        = "Tarif Sewa (USD)",
+    y        = "Revenue (USD)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(color = "#64748b", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 4:** Tiga kelompok titik yang terpisah pada sumbu x mencerminkan sifat diskrit tarif sewa. Terlihat jelas bahwa distribusi revenue pada tier $4.99 secara keseluruhan lebih tinggi dibandingkan tier $2.99, dan tier $2.99 lebih tinggi dari $0.99. Garis regresi merah dengan interval kepercayaan yang relatif sempit mengkonfirmasi hubungan positif yang konsisten. Dispersi vertikal yang cukup besar pada setiap tier menunjukkan bahwa tarif sewa bukan satu-satunya faktor penentu revenue — frekuensi penyewaan turut memainkan peran penting.
+
+
+
+## Scatter Plot: Frekuensi Penyewaan vs Revenue
+
+```{r scatter-rental, fig.cap="Gambar 5. Hubungan antara frekuensi penyewaan dan revenue. Pola linear yang jelas terlihat di seluruh rentang frekuensi dengan interval kepercayaan yang sempit."}
+ggplot(df, aes(x = total_rental, y = revenue)) +
+  geom_point(alpha = 0.35, color = "#8b5cf6", size = 1.8) +
+  geom_smooth(
+    method = "lm", color = "#ef4444",
+    fill   = "#fecaca", se = TRUE, linewidth = 1.2
+  ) +
+  scale_y_continuous(labels = dollar_format()) +
+  labs(
+    title    = "Hubungan Frekuensi Penyewaan dan Revenue",
+    subtitle = "Korelasi positif yang konsisten di seluruh rentang frekuensi penyewaan",
+    x        = "Total Penyewaan (kali)",
+    y        = "Revenue (USD)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(color = "#64748b", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 5:** Berbeda dengan Gambar 4, titik-titik data pada scatter plot ini tersebar lebih merata sepanjang sumbu x karena variabel frekuensi penyewaan bersifat kontinu. Tren positif yang kuat terlihat jelas — setiap penambahan frekuensi penyewaan secara konsisten meningkatkan revenue. Lebar interval kepercayaan yang sangat sempit di sepanjang garis regresi mengindikasikan estimasi yang sangat presisi, menunjukkan hubungan linear antara frekuensi sewa dan revenue yang stabil dan dapat diandalkan. Variasi vertikal yang ada di sekitar garis mencerminkan perbedaan tarif sewa antar film pada frekuensi yang sama.
+
+
+
+---
+
+# Analisis Revenue per Kategori Film
+
+## Agregasi Revenue per Genre
+
+```{r cat-rev}
+category_revenue <- df %>%
+  group_by(category) %>%
+  summarise(
+    avg_revenue   = mean(revenue),
+    total_revenue = sum(revenue),
+    total_film    = n(),
+    .groups       = "drop"
+  ) %>%
+  arrange(desc(avg_revenue))
+
+category_revenue %>%
+  mutate(
+    avg_revenue   = dollar(round(avg_revenue, 2)),
+    total_revenue = dollar(round(total_revenue, 2))
+  ) %>%
+  kable(
+    caption   = "Tabel 3. Ringkasan Revenue per Kategori Film",
+    col.names = c("Kategori", "Avg Revenue", "Total Revenue", "Jumlah Film")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = FALSE,
+    font_size         = 15
+  ) %>%
+  row_spec(1, bold = TRUE, background = "#dbeafe") %>%
+  row_spec(nrow(category_revenue), background = "#fee2e2")
+```
+
+## Visualisasi Rata-Rata Revenue per Genre
+
+```{r barplot-genre, fig.height=6.5, fig.cap="Gambar 6. Rata-rata revenue per genre film, diurutkan dari tertinggi ke terendah. Gradasi warna biru mencerminkan tinggi rendahnya nilai, dengan label dolar di setiap batang untuk memudahkan pembacaan."}
+ggplot(
+  category_revenue,
+  aes(x = reorder(category, avg_revenue), y = avg_revenue, fill = avg_revenue)
+) +
+  geom_col(width = 0.75, show.legend = FALSE) +
+  geom_text(
+    aes(label = paste0("$", round(avg_revenue, 1))),
+    hjust = -0.1, size = 3.7, fontface = "bold", color = "#1e293b"
+  ) +
+  scale_fill_gradient(low = "#93c5fd", high = "#1d4ed8") +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.2)),
+    labels = dollar_format()
+  ) +
+  coord_flip() +
+  labs(
+    title    = "Rata-Rata Revenue per Genre Film",
+    subtitle = "Berdasarkan 958 film dari 16 kategori pada database Sakila",
+    x        = NULL,
+    y        = "Rata-Rata Revenue (USD)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 14),
+    plot.subtitle      = element_text(color = "#64748b", size = 11),
+    axis.text.y        = element_text(size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 6:** Secara deskriptif, terdapat variasi rata-rata revenue di antara 16 genre yang tersedia. Genre **Sci-Fi** menempati posisi teratas dengan rata-rata revenue $80.6 per film, diikuti oleh **Comedy** ($78.3) dan **Drama** ($75.2). Di sisi lain, genre **Children** ($63.0) dan **Family** ($63.1) mencatat rata-rata terendah. Selisih antara genre tertinggi dan terendah hanya mencapai sekitar $17.6 — sebuah perbedaan yang tampak bermakna secara deskriptif namun perlu diuji secara statistik. Perlu diperhatikan bahwa variasi yang terjadi *di dalam* masing-masing genre juga sangat besar, yang dapat melemahkan kemampuan deteksi perbedaan antar genre secara statistik.
+
+
+
+---
+
+# Uji ANOVA: Perbedaan Revenue Antar Genre
+
+
+
+> Analysis of Variance (ANOVA) satu arah digunakan untuk menguji secara formal apakah terdapat perbedaan yang signifikan pada rata-rata revenue di antara 16 genre film yang ada. Uji ini merupakan ekstensi dari uji-t untuk lebih dari dua kelompok.
+
+
+
+## Dasar Teori
+
+Hipotesis yang diuji:
+
+$$H_0 : \mu_1 = \mu_2 = \cdots = \mu_{16}$$
+$$H_1 : \exists\, i \neq j \text{ sedemikian sehingga } \mu_i \neq \mu_j$$
+
+Statistik uji rasio F dihitung sebagai:
+
+$$F = \frac{MS_{\text{Between}}}{MS_{\text{Within}}} = \frac{SS_{\text{Between}} / (k-1)}{SS_{\text{Within}} / (N-k)}$$
+
+dengan $k = 16$ (jumlah genre) dan $N = 958$ (total observasi).
+
+## Hasil Uji ANOVA
+
+```{r anova-run}
+anova_model <- aov(revenue ~ category, data = df)
+summary(anova_model)
+```
+
+| Sumber Variansi | df | SS | MS | F | p-value |
+|---|---|---|---|---|---|
+| Category (Antar Genre) | 15 | 25.048 | 1.670 | 0.933 | 0.527 |
+| Residuals (Dalam Genre) | 942 | 1.686.475 | 1.790 | — | — |
+
+
+
+**Interpretasi ANOVA:** Nilai F = 0.933 dengan p-value = 0.527 jauh melebihi taraf signifikansi α = 0.05. Dengan demikian, **gagal tolak H₀** — tidak terdapat perbedaan rata-rata revenue yang signifikan secara statistik di antara ke-16 genre film. Hal yang menarik untuk dicermati adalah nilai MSBetween (1.670) yang bahkan lebih kecil dari MSWithin (1.790), sehingga menghasilkan F < 1. Ini berarti variansi yang dapat dijelaskan oleh perbedaan antar genre lebih kecil dari variansi alami yang terjadi di dalam setiap genre itu sendiri — mengindikasikan bahwa genre bukan faktor pembeda revenue yang bermakna.
+
+
+
+## Uji Post-Hoc: Tukey HSD
+
+```{r tukey-run}
+tukey_result <- TukeyHSD(anova_model)
+
+significant_pairs <- as.data.frame(tukey_result$category) %>%
+  filter(`p adj` < 0.05)
+```
+
+Meskipun ANOVA tidak menunjukkan perbedaan signifikan secara keseluruhan, uji Tukey HSD tetap dilakukan untuk memeriksa secara menyeluruh apakah ada pasangan genre tertentu yang berbeda secara statistik setelah koreksi *familywise error rate*. Dari total **`r choose(16,2)`** pasangan genre yang diuji, diperoleh **`r nrow(significant_pairs)` pasangan** yang memiliki perbedaan signifikan pada α = 0.05.
+
+```{r tukey-plot, fig.height=9, fig.cap="Gambar 7. Diagram interval kepercayaan Tukey HSD untuk pasangan genre yang dibandingkan terhadap genre Action sebagai referensi. Semua interval mencakup nol (garis merah), mengkonfirmasi tidak ada perbedaan yang signifikan."}
+tukey_df <- as.data.frame(tukey_result$category) %>%
+  tibble::rownames_to_column("pair") %>%
+  filter(grepl("-Action$", pair)) %>%
+  arrange(diff)
+
+ggplot(tukey_df, aes(x = reorder(pair, diff), y = diff)) +
+  geom_hline(
+    yintercept = 0, color = "#ef4444",
+    linetype = "dashed", linewidth = 1
+  ) +
+  geom_errorbar(
+    aes(ymin = lwr, ymax = upr),
+    width = 0.35, color = "#64748b", linewidth = 0.7
+  ) +
+  geom_point(
+    aes(color = `p adj` < 0.05), size = 3.5
+  ) +
+  scale_color_manual(
+    values = c("TRUE" = "#ef4444", "FALSE" = "#3b82f6"),
+    labels = c("TRUE" = "Signifikan (p < 0.05)", "FALSE" = "Tidak Signifikan"),
+    name   = "Status"
+  ) +
+  coord_flip() +
+  labs(
+    title    = "Tukey HSD — Perbandingan Revenue Genre vs Action",
+    subtitle = "Interval kepercayaan 95%; garis merah putus-putus = tidak ada selisih (diff = 0)",
+    x        = "Pasangan Genre",
+    y        = "Selisih Rata-rata Revenue (USD)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(color = "#64748b", size = 10),
+    legend.position  = "bottom",
+    panel.grid.minor = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 7:** Seluruh interval kepercayaan 95% mencakup nilai nol (ditandai garis merah putus-putus), yang berarti selisih rata-rata revenue antara setiap genre dengan genre Action tidak berbeda secara signifikan. Semua titik berwarna biru menandakan status "tidak signifikan". Hasil ini konsisten dan memperkuat kesimpulan ANOVA: **tidak ada satu pun pasangan genre yang memiliki perbedaan rata-rata revenue yang signifikan secara statistik setelah koreksi familywise error rate**. Implikasinya, strategi bisnis yang berbeda untuk setiap genre (misalnya penetapan harga berbeda per genre) tidak dapat dijustifikasi berdasarkan perbedaan revenue genre semata.
+
+
+
+---
+
+# Analisis Distribusi Geografis Pelanggan
+
+```{r country-prep}
+country_df <- customer %>%
+  inner_join(address, by = "address_id") %>%
+  inner_join(city,    by = "city_id") %>%
+  inner_join(country, by = "country_id")
+
+country_summary <- country_df %>%
+  group_by(country) %>%
+  summarise(total_customer = n(), .groups = "drop") %>%
+  arrange(desc(total_customer))
+
+head(country_summary, 10) %>%
+  kable(
+    caption   = "Tabel 4. Top 10 Negara dengan Jumlah Pelanggan Terbanyak",
+    col.names = c("Negara", "Jumlah Pelanggan")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = FALSE,
+    font_size         = 15
+  ) %>%
+  row_spec(1:3, bold = TRUE, background = "#dbeafe") %>%
+  column_spec(2, bold = TRUE)
+```
+
+```{r country-plot, fig.height=5.5, fig.cap="Gambar 8. Top 10 negara dengan jumlah pelanggan terbanyak. Warna gradasi hijau mencerminkan jumlah pelanggan, dengan India dan China mendominasi secara signifikan."}
+ggplot(
+  head(country_summary, 10),
+  aes(x = reorder(country, total_customer), y = total_customer, fill = total_customer)
+) +
+  geom_col(width = 0.72, show.legend = FALSE) +
+  geom_text(
+    aes(label = total_customer),
+    hjust = -0.2, size = 4, fontface = "bold", color = "#1e293b"
+  ) +
+  scale_fill_gradient(low = "#86efac", high = "#15803d") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
+  coord_flip() +
+  labs(
+    title    = "Top 10 Negara dengan Pelanggan Terbanyak",
+    subtitle = "Distribusi geografis pelanggan berdasarkan data database Sakila",
+    x        = NULL,
+    y        = "Jumlah Pelanggan"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 14),
+    plot.subtitle      = element_text(color = "#64748b", size = 11),
+    axis.text.y        = element_text(size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 8:** **India** merupakan negara dengan pelanggan terbesar (60 pelanggan), diikuti **China** (53) dan **Amerika Serikat** (36). Kesenjangan yang cukup mencolok antara India-China di posisi 1–2 dengan negara-negara lainnya menunjukkan konsentrasi pelanggan yang tidak merata secara geografis. Dari 10 besar, lima negara berasal dari kawasan Asia — India, China, Jepang, Filipina, dan Indonesia — yang mencerminkan dominasi pelanggan dari wilayah tersebut. Temuan ini dapat menjadi landasan prioritas ekspansi layanan atau perancangan kampanye pemasaran yang lebih terlokalisasi di Asia, khususnya Asia Selatan dan Asia Timur.
+
+
+
+---
+
+# Segmentasi Pelanggan dengan K-Means Clustering
+
+
+
+> Segmentasi pelanggan bertujuan mengelompokkan pelanggan ke dalam segmen-segmen yang homogen berdasarkan pola perilaku transaksi. Pemahaman terhadap karakteristik setiap segmen memungkinkan bisnis merancang strategi yang lebih tepat sasaran dan personal untuk masing-masing kelompok pelanggan.
+
+
+
+## Dasar Teori
+
+K-Means Clustering adalah algoritma pembelajaran mesin tanpa pengawasan yang meminimalkan fungsi objektif **Within-Cluster Sum of Squares (WCSS)**:
+
+$$J = \sum_{i=1}^{k} \sum_{x_j \in C_i} \| x_j - \mu_i \|^2$$
+
+Centroid setiap klaster diperbarui secara iteratif sebagai rata-rata dari seluruh titik data yang termasuk ke dalam klaster tersebut:
+
+$$\mu_i = \frac{1}{|C_i|} \sum_{x_j \in C_i} x_j$$
+
+Jarak antar titik data dihitung menggunakan **jarak Euclidean**:
+
+$$d(x_j, \mu_i) = \sqrt{\sum_{l=1}^{p}(x_{jl} - \mu_{il})^2}$$
+
+Proses ini diulang hingga konvergensi, yaitu ketika posisi centroid tidak berubah secara signifikan antar iterasi.
+
+## Pembentukan Data Pelanggan
+
+```{r cust-data}
+customer_df <- customer %>%
+  inner_join(rental,  by = "customer_id") %>%
+  inner_join(payment, by = c("customer_id", "rental_id")) %>%
+  group_by(customer_id) %>%
+  summarise(
+    frequency_rental = n(),
+    total_spending   = sum(amount),
+    avg_payment      = mean(amount),
+    .groups          = "drop"
+  )
+
+head(customer_df, 8) %>%
+  kable(
+    caption   = "Tabel 5. Preview Data Perilaku Transaksi Pelanggan",
+    col.names = c("Customer ID", "Frekuensi Rental", "Total Spending", "Avg Payment"),
+    digits    = 2
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = FALSE,
+    font_size         = 15
+  )
+```
+
+Dataset pelanggan mencakup **`r nrow(customer_df)` pelanggan unik** dengan tiga variabel perilaku transaksi. Ketiga variabel ini dipilih karena merepresentasikan dimensi yang berbeda dari perilaku konsumsi: seberapa sering (*frequency*), seberapa banyak total yang dibelanjakan (*monetary*), dan seberapa besar nilai rata-rata per transaksi (*average value*).
+
+## Standarisasi Data
+
+```{r scaling}
+scaled_data <- scale(customer_df[, 2:4])
+```
+
+Standarisasi *z-score* dilakukan untuk memastikan setiap variabel memiliki rata-rata 0 dan standar deviasi 1. Tanpa standarisasi, variabel `total_spending` yang memiliki rentang nilai jauh lebih besar (dalam satuan dolar) akan mendominasi penghitungan jarak Euclidean dan menghasilkan klaster yang bias — seolah-olah seluruh perbedaan antar pelanggan hanya berasal dari selisih pengeluaran total, padahal frekuensi dan nilai rata-rata per transaksi juga sama pentingnya.
+
+## Penentuan Jumlah Klaster Optimal
+
+Dua metode digunakan secara berdampingan untuk menentukan jumlah klaster yang paling representatif, sehingga kesimpulan tidak hanya bergantung pada satu kriteria saja.
+
+### Elbow Method
+
+```{r elbow, fig.cap="Gambar 9. Elbow Method — nilai WCSS terhadap berbagai jumlah klaster k. Penurunan WCSS mulai melandai secara signifikan setelah k = 2, menandakan titik siku yang optimal."}
+fviz_nbclust(
+  scaled_data,
+  kmeans,
+  method    = "wss",
+  k.max     = 8,
+  linecolor = "#1d4ed8"
+) +
+  geom_vline(
+    xintercept = 2,
+    linetype   = "dashed",
+    color      = "#ef4444",
+    linewidth  = 1.1
+  ) +
+  labs(
+    title    = "Elbow Method — Penentuan Jumlah Klaster Optimal",
+    subtitle = "Within-Cluster Sum of Squares (WCSS) terhadap jumlah klaster k"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(color = "#64748b", size = 10)
+  )
+```
+
+
+
+**Interpretasi Gambar 9 — Elbow Method:** Grafik memperlihatkan penurunan WCSS yang tajam dari k = 1 hingga k = 2. Setelah k = 2, laju penurunan WCSS mulai melandai secara signifikan — setiap penambahan klaster hanya memberikan pengurangan WCSS yang kecil namun dengan kompleksitas model yang terus bertambah. Titik "siku" ini (ditandai garis merah) berada pada **k = 2**, mengindikasikan bahwa dua klaster sudah cukup untuk menangkap sebagian besar struktur heterogenitas dalam data pelanggan tanpa overfitting.
+
+
+
+### Silhouette Method
+
+```{r silhouette, fig.cap="Gambar 10. Silhouette Method — rata-rata lebar silhouette untuk berbagai nilai k. Nilai tertinggi mengindikasikan jumlah klaster di mana setiap data point paling tepat berada di klasternya dan paling jauh dari klaster lain."}
+fviz_nbclust(
+  scaled_data,
+  kmeans,
+  method    = "silhouette",
+  k.max     = 8,
+  linecolor = "#16a34a"
+) +
+  geom_vline(
+    xintercept = 2,
+    linetype   = "dashed",
+    color      = "#ef4444",
+    linewidth  = 1.1
+  ) +
+  labs(
+    title    = "Silhouette Method — Validasi Jumlah Klaster Optimal",
+    subtitle = "Average Silhouette Width terhadap jumlah klaster k"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(color = "#64748b", size = 10)
+  )
+```
+
+
+
+**Interpretasi Gambar 10 — Silhouette Method:** Silhouette Width mengukur seberapa mirip setiap data point dengan klasternya sendiri dibandingkan dengan klaster terdekat lainnya. Nilai berkisar antara −1 (salah klaster) hingga +1 (klaster sangat tepat). Grafik menunjukkan bahwa rata-rata silhouette width tertinggi diperoleh pada **k = 2** (ditandai garis merah), mengkonfirmasi rekomendasi Elbow Method. Kedua metode yang independen ini sama-sama menunjuk ke k = 2 sebagai jumlah klaster yang paling optimal untuk data pelanggan ini.
+
+
+
+## Pemodelan K-Means (k = 2)
+
+```{r kmeans-run}
+set.seed(123)
+kmeans_model <- kmeans(scaled_data, centers = 2, nstart = 25)
+```
+
+Model K-Means dengan k = 2 berhasil dijalankan menggunakan `nstart = 25` untuk memastikan algoritma tidak terjebak pada solusi lokal — program menjalankan 25 inisialisasi acak berbeda dan memilih hasil dengan WCSS terkecil. Dua klaster yang terbentuk memiliki ukuran **`r kmeans_model$size[1]`** dan **`r kmeans_model$size[2]`** pelanggan. Model ini berhasil menjelaskan **`r round(kmeans_model$betweenss / kmeans_model$totss * 100, 1)`%** dari total variansi data melalui struktur klaster yang terbentuk.
+
+```{r kmeans-centers}
+round(kmeans_model$centers, 4) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Klaster") %>%
+  kable(
+    caption = "Tabel 6. Centroid Setiap Klaster (Nilai Z-Score)",
+    digits  = 4,
+    col.names = c("Klaster", "Freq. Rental", "Total Spending", "Avg Payment")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width        = FALSE,
+    font_size         = 15
+  )
+```
+
+## Visualisasi Klaster
+
+```{r cluster-viz, fig.cap="Gambar 11. Visualisasi segmentasi pelanggan K-Means k=2 yang diproyeksikan ke dua dimensi melalui PCA. Setiap warna merepresentasikan satu segmen pelanggan. Elips konveks menunjukkan batas setiap klaster."}
+fviz_cluster(
+  kmeans_model,
+  data          = scaled_data,
+  palette       = c("#ef4444", "#22c55e"),
+  ellipse.type  = "convex",
+  ellipse.alpha = 0.1,
+  geom          = "point",
+  pointsize     = 1.8,
+  alpha         = 0.65,
+  labelsize     = 0,
+  ggtheme       = theme_minimal(base_size = 13)
+) +
+  labs(
+    title    = "Segmentasi Pelanggan — K-Means Clustering (k = 2)",
+    subtitle = "Diproyeksikan ke 2 dimensi menggunakan Principal Component Analysis (PCA)"
+  ) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(color = "#64748b", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+
+## Profil dan Interpretasi Segmen
+
+```{r cluster-profile}
+customer_df$cluster <- factor(kmeans_model$cluster)
+
+cluster_profile <- customer_df %>%
+  group_by(cluster) %>%
+  summarise(
+    Pelanggan      = n(),
+    Freq_Rental    = round(mean(frequency_rental), 1),
+    Total_Spending = round(mean(total_spending), 2),
+    Avg_Payment    = round(mean(avg_payment), 2),
+    .groups        = "drop"
+  )
+
+cluster_profile %>%
+  kable(
+    caption   = "Tabel 7. Profil Rata-rata Setiap Segmen Pelanggan (Nilai Asli)",
+    col.names = c("Klaster", "Jumlah Pelanggan", "Freq. Rental", "Total Spending", "Avg Payment")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width        = FALSE,
+    font_size         = 15
+  ) %>%
+  row_spec(which.max(cluster_profile$Total_Spending), background = "#dcfce7", bold = TRUE)
+```
+
+```{r cluster-bar, fig.height=5, fig.cap="Gambar 12. Perbandingan dua karakteristik kunci antar segmen pelanggan: frekuensi penyewaan (kiri) dan rata-rata pembayaran per transaksi (kanan). Perbedaan pola antar klaster mencerminkan profil perilaku yang berbeda."}
+cluster_long <- customer_df %>%
+  group_by(cluster) %>%
+  summarise(
+    `Frekuensi Rental (kali)` = mean(frequency_rental),
+    `Rata-rata Bayar ($)`     = mean(avg_payment),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(-cluster, names_to = "Metrik", values_to = "Nilai")
+
+ggplot(cluster_long, aes(x = cluster, y = Nilai, fill = cluster)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_text(
+    aes(label = round(Nilai, 1)),
+    vjust = -0.5, fontface = "bold", size = 4.2
+  ) +
+  scale_fill_manual(values = c("1" = "#ef4444", "2" = "#22c55e")) +
+  facet_wrap(~Metrik, scales = "free_y", ncol = 2) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.2))) +
+  labs(
+    title    = "Profil Karakteristik per Segmen Pelanggan",
+    subtitle = "Perbedaan pola frekuensi dan nilai transaksi antar dua klaster",
+    x        = "Klaster",
+    y        = "Nilai"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 13),
+    plot.subtitle      = element_text(color = "#64748b", size = 10),
+    strip.text         = element_text(face = "bold", size = 11),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank()
+  )
+```
+
+
+
+**Interpretasi Gambar 11, 12, dan Tabel 6–7:**
+
+Centroid pada Tabel 6 dalam z-score menunjukkan posisi relatif setiap klaster terhadap rata-rata keseluruhan data. Mengacu pada nilai asli di Tabel 7:
+
+**Klaster 1 — Pelanggan Jarang, Tarif Premium (Merah):** Frekuensi penyewaan di bawah rata-rata namun rata-rata pembayaran per transaksi tertinggi. Segmen ini cenderung menyewa sesekali tetapi memilih film dengan tarif sewa premium ($4.99). Meskipun jarang bertransaksi, nilai setiap kunjungan mereka relatif tinggi. Strategi yang tepat: dorong frekuensi kunjungan melalui program diskon khusus atau notifikasi film baru di tier premium.
+
+**Klaster 2 — Pelanggan Aktif, Bernilai Tinggi (Hijau):** Frekuensi penyewaan tertinggi sekaligus total pengeluaran terbesar menjadikan segmen ini sebagai aset pelanggan paling strategis. Mereka aktif menyewa dan tidak terlalu sensitif terhadap harga. Ini adalah segmen prioritas utama program loyalitas untuk mempertahankan kontribusi revenue mereka.
+
+
+
+
+
+**Kualitas Model K-Means:** Nilai Between_SS / Total_SS = **`r round(kmeans_model$betweenss / kmeans_model$totss * 100, 1)`%** menunjukkan bahwa model berhasil menjelaskan sekitar 56–57% total variansi data melalui struktur dua klaster. Nilai ini tergolong memadai untuk data perilaku pelanggan dengan tiga dimensi, mengindikasikan bahwa kedua klaster memiliki karakteristik yang cukup berbeda dan kohesif secara internal.
+
+
+
+---
+
+# Regresi Linear Berganda: Pemodelan Revenue Film
+
+
+
+> Regresi linear berganda digunakan untuk memodelkan dan memprediksi revenue film berdasarkan atribut-atributnya secara simultan. Model ini memungkinkan interpretasi pengaruh masing-masing prediktor secara parsial — yaitu dengan menganggap variabel lain konstan — sehingga kontribusi unik setiap variabel dapat dikuantifikasi.
+
+
+
+## Spesifikasi Model
+
+$$\hat{Y} = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \beta_3 X_3 + \varepsilon$$
+
+dengan:
+
+- $\hat{Y}$ = prediksi `revenue` (USD)
+- $X_1$ = `rental_rate` (tarif sewa per transaksi, USD)
+- $X_2$ = `length` (durasi film, menit)
+- $X_3$ = `total_rental` (total frekuensi penyewaan, kali)
+- $\varepsilon$ = galat model (*error term*)
+
+## Hasil Regresi
+
+```{r reg-model}
+reg_model <- lm(revenue ~ rental_rate + length + total_rental, data = df)
+summary(reg_model)
+```
+
+```{r koef-tabel}
+coef_df <- summary(reg_model)$coefficients %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Prediktor") %>%
+  mutate(
+    Signifikansi = case_when(
+      `Pr(>|t|)` < 0.001 ~ "*** (< 0.001)",
+      `Pr(>|t|)` < 0.01  ~ "** (< 0.01)",
+      `Pr(>|t|)` < 0.05  ~ "* (< 0.05)",
+      TRUE               ~ "ns (tidak signifikan)"
+    ),
+    `Pr(>|t|)` = ifelse(`Pr(>|t|)` < 0.001,
+                        "< 0.001",
+                        as.character(round(`Pr(>|t|)`, 4)))
+  )
+
+coef_df %>%
+  kable(
+    caption = "Tabel 8. Ringkasan Koefisien Model Regresi Linear Berganda",
+    digits  = 4,
+    col.names = c("Prediktor", "Estimasi", "Std. Error", "t-value", "p-value", "Signifikansi")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width        = FALSE,
+    font_size         = 15
+  ) %>%
+  row_spec(4, background = "#fef3c7")
+```
+
+
+
+**Kualitas Kecocokan Model:**
+
+• **Multiple R² = 0.8308** → model mampu menjelaskan 83.1% variasi revenue film. Ini merupakan tingkat explanatory power yang sangat baik untuk data observasional.
+
+• **Adjusted R² = 0.8302** → hampir identik dengan R², mengkonfirmasi bahwa penambahan tiga prediktor tidak menghasilkan overfitting; setiap variabel memberikan kontribusi yang genuine.
+
+• F-statistic = 1561, p  → model secara keseluruhan sangat signifikan dan tidak terjadi oleh kebetulan.
+
+
+
+
+
+**Interpretasi Koefisien:**
+
+**Intercept (β₀ = −50.463):** Nilai baseline revenue ketika seluruh prediktor bernilai nol. Interpretasi praktisnya tidak bermakna (tidak ada film dengan panjang 0 menit, tarif $0, dan 0 kali disewa), namun konstanta ini diperlukan untuk anchoring model.
+
+rental_rate (β₁ = 16.593, p  Setiap kenaikan tarif sewa sebesar $1, revenue meningkat rata-rata $16.59 dengan asumsi variabel lain konstan. Ini adalah efek yang sangat besar secara praktis — perbedaan tarif dari $0.99 ke $4.99 (selisih $4) menghasilkan estimasi perbedaan revenue sekitar $66 per film, semata-mata dari faktor harga. Prediktor ini merupakan yang paling dominan secara kontribusi individual.
+
+**length (β₂ = −0.006, p = 0.678):** Durasi film tidak memberikan pengaruh yang signifikan terhadap revenue. Nilai estimasi yang mendekati nol dan p-value yang jauh di atas 0.05 mengkonfirmasi temuan korelasi sebelumnya. Variabel ini dapat dipertimbangkan untuk dieliminasi dalam versi model yang lebih parsimonious tanpa kehilangan kemampuan prediksi yang berarti.
+
+total_rental (β₃ = 4.304, p  Setiap penambahan satu transaksi penyewaan, revenue meningkat rata-rata $4.30 dengan asumsi variabel lain konstan. Film yang berhasil disewa 10 kali lebih sering dari film lain diperkirakan menghasilkan revenue $43 lebih tinggi di luar pengaruh tarif — efek kumulatif dari frekuensi yang tinggi.
+
+
+
+---
+
+# Pengujian Asumsi Regresi
+
+Validasi model regresi linear berganda mensyaratkan pemenuhan beberapa asumsi klasik. Pelanggaran terhadap asumsi-asumsi ini dapat menyebabkan estimator tidak efisien atau inferensi statistik (uji t, interval kepercayaan) menjadi tidak valid.
+
+## Normalitas Residual
+
+### Histogram Residual
+
+```{r resid-hist, fig.cap="Gambar 13. Histogram residual dengan kurva distribusi normal teoritis. Distribusi tampak mendekati simetris namun dengan ekor yang sedikit lebih berat dari normal."}
+residuals_reg <- residuals(reg_model)
+
+ggplot(data.frame(res = residuals_reg), aes(x = res)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins  = 35,
+    fill  = "#6366f1",
+    color = "white",
+    alpha = 0.85
+  ) +
+  stat_function(
+    fun  = dnorm,
+    args = list(mean = mean(residuals_reg), sd = sd(residuals_reg)),
+    color = "#ef4444", linewidth = 1.3
+  ) +
+  geom_vline(
+    xintercept = 0,
+    color = "#94a3b8", linetype = "dashed", linewidth = 0.9
+  ) +
+  labs(
+    title    = "Distribusi Residual Model Regresi",
+    subtitle = "Kurva merah = distribusi normal teoritis; garis abu-abu putus-putus = nol",
+    x        = "Nilai Residual",
+    y        = "Densitas"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(color = "#64748b", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+
+### Normal Q-Q Plot
+
+```{r qqplot, fig.width=6, fig.height=5.5, fig.cap="Gambar 14. Normal Q-Q Plot residual. Titik-titik data yang mendekati garis diagonal merah menunjukkan distribusi mendekati normal, dengan penyimpangan di kedua ekor yang mengindikasikan distribusi berekor lebih berat."}
+qqnorm(
+  residuals_reg,
+  main = "Normal Q-Q Plot — Residual Model Regresi",
+  col  = "#6366f1",
+  pch  = 16, cex = 0.55,
+  xlab = "Kuantil Teoritis (Normal)",
+  ylab = "Kuantil Sampel (Residual)"
+)
+qqline(residuals_reg, col = "#ef4444", lwd = 2)
+```
+
+### Uji Shapiro-Wilk
+
+```{r shapiro-test}
+shapiro.test(residuals_reg)
+```
+
+**Hipotesis:**
+
+$$H_0 : \text{Residual berdistribusi normal}$$
+$$H_1 : \text{Residual tidak berdistribusi normal}$$
+
+
+
+**Interpretasi Uji Shapiro-Wilk:** Statistik W = 0.991 dengan p-value = 1.82e-05 < 0.05 menghasilkan keputusan **tolak H₀** secara formal. Namun, interpretasi perlu dilakukan secara hati-hati: nilai W = 0.991 sendiri sangat mendekati 1.0 (nilai sempurna untuk distribusi normal), menunjukkan bahwa penyimpangan dari normalitas sangat kecil secara substantif. Uji Shapiro-Wilk dikenal sangat sensitif pada ukuran sampel besar (n = 958) — bahkan deviasi kecil yang tidak relevan secara praktis pun dapat menghasilkan p-value yang signifikan. Histogram (Gambar 13) dan Q-Q Plot (Gambar 14) secara visual mengkonfirmasi distribusi yang relatif simetris dan mendekati normal. Berdasarkan *Central Limit Theorem*, pada n = 958 inferensi statistik regresi linear tetap valid secara asimtotis.
+
+
+
+## Homoskedastisitas
+
+```{r resid-fit-plot, fig.cap="Gambar 15. Plot Residual vs Fitted Values. Garis LOESS (oranye) yang idealnya mendatar di sekitar nol namun menunjukkan sedikit pola, bersama dengan dispersi vertikal yang semakin besar ke kanan, mengindikasikan adanya heteroskedastisitas."}
+plot_df <- data.frame(fitted = fitted(reg_model), residuals = residuals_reg)
+
+ggplot(plot_df, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.28, color = "#6366f1", size = 1.5) +
+  geom_hline(
+    yintercept = 0,
+    color = "#ef4444", linetype = "dashed", linewidth = 1
+  ) +
+  geom_smooth(
+    method = "loess", color = "#f97316",
+    se = FALSE, linewidth = 1.1
+  ) +
+  scale_x_continuous(labels = dollar_format()) +
+  labs(
+    title    = "Residual vs Fitted Values",
+    subtitle = "Ideal: titik tersebar acak di sekitar garis nol tanpa pola sistematis",
+    x        = "Nilai Prediksi — Fitted (USD)",
+    y        = "Residual"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 14),
+    plot.subtitle    = element_text(color = "#64748b", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+
+```{r bptest-run}
+bptest(reg_model)
+```
+
+**Hipotesis:**
+
+$$H_0 : \text{Varians residual konstan (homoskedastis)}$$
+$$H_1 : \text{Varians residual tidak konstan (heteroskedastis)}$$
+
+
+
+**Interpretasi Uji Breusch-Pagan dan Gambar 15:** Statistik BP = 59.371 dengan p-value = 8.01e-13 << 0.05 menghasilkan keputusan **tolak H₀** — terdapat bukti yang sangat kuat adanya heteroskedastisitas. Gambar 15 mengkonfirmasi hal ini secara visual: dispersi titik-titik data terlihat semakin melebar seiring bertambahnya nilai prediksi (nilai fitted yang lebih tinggi memiliki residual yang lebih bervariasi). Garis LOESS oranye yang tidak sepenuhnya mendatar juga mengindikasikan pola sistematis pada residual.
+
+Pelanggaran asumsi ini menyebabkan estimator OLS tidak lagi BLUE (*Best Linear Unbiased Estimator*), dan standar error koefisien menjadi bias sehingga uji t dan interval kepercayaan tidak sepenuhnya valid. Penanganan yang direkomendasikan: (1) penerapan *Heteroskedasticity-Consistent Standard Errors* (metode HC3 via paket `sandwich`), (2) transformasi logaritmik pada variabel dependen: `log(revenue)`, atau (3) regresi tertimbang (*Weighted Least Squares*).
+
+
+
+## Multikolinearitas (VIF)
+
+```{r vif-run}
+vif_result <- vif(reg_model)
+
+data.frame(
+  Variabel  = names(vif_result),
+  VIF       = round(vif_result, 4),
+  Toleransi = round(1 / vif_result, 4),
+  Status    = ifelse(vif_result < 5, "Aman (VIF < 5)", "Bermasalah")
+) %>%
+  kable(
+    caption = "Tabel 9. Variance Inflation Factor (VIF) untuk Setiap Prediktor"
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width        = FALSE,
+    font_size         = 15
+  ) %>%
+  column_spec(4, bold = TRUE)
+```
+
+
+
+**Interpretasi VIF:** VIF mengukur seberapa besar varians koefisien regresi membesar akibat kolinearitas dengan prediktor lain, dihitung sebagai $\\text{VIF}_i = 1/(1 - R_i^2)$ di mana $R_i^2$ adalah koefisien determinasi ketika prediktor ke-$i$ diregresikan terhadap seluruh prediktor lainnya.
+
+Seluruh nilai VIF mendekati **1.0** — nilai teoritis minimum yang menunjukkan tidak ada kolinearitas sama sekali. Ini jauh di bawah ambang kritis VIF = 5 (indikasi masalah moderat) maupun VIF = 10 (masalah serius). Dengan demikian, **asumsi bebas multikolinearitas terpenuhi sepenuhnya**. Setiap prediktor membawa informasi yang benar-benar independen dan tidak redundan, sehingga estimasi koefisien regresi tidak mengalami inflasi varians akibat kolinearitas.
+
+
+
+## Ringkasan Pengujian Asumsi
+
+```{r asumsi-table}
+data.frame(
+  Asumsi     = c("Normalitas Residual", "Homoskedastisitas", "Bebas Multikolinearitas"),
+  Uji        = c("Shapiro-Wilk", "Breusch-Pagan", "VIF"),
+  Statistik  = c("W = 0.991", "BP = 59.371", "Maks = 1.004"),
+  pvalue     = c("1.82e-05", "8.01e-13", "-"),
+  Keputusan  = c("Tolak H0", "Tolak H0", "-"),
+  Kesimpulan = c(
+    "Minor pada n besar; model masih valid secara asimtotis",
+    "Heteroskedastis - perlu penanganan lanjutan",
+    "Terpenuhi - tidak ada multikolinearitas"
+  )
+) %>%
+  kable(
+    caption   = "Tabel 10. Ringkasan Pengujian Asumsi Klasik Model Regresi",
+    col.names = c("Asumsi", "Metode Uji", "Statistik", "p-value", "Keputusan", "Kesimpulan")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width        = TRUE,
+    font_size         = 15
+  ) %>%
+  row_spec(1, background = "#fffbeb") %>%
+  row_spec(2, background = "#fef2f2") %>%
+  row_spec(3, background = "#f0fdf4")
+```
+
+---
+
+# Kesimpulan dan Rekomendasi
+
+## Rangkuman Temuan
+
+**Statistik Deskriptif.** Dataset mencakup 958 film dari 16 genre dengan rata-rata revenue \$70.36 per film. Distribusi revenue bersifat *right-skewed* yang mengindikasikan adanya sebagian kecil film dengan performa jauh di atas rata-rata — kemungkinan film bertar sewa tinggi yang juga sering disewa. Tarif sewa bersifat diskrit tiga tier dan frekuensi penyewaan bervariasi antara 4 hingga 34 kali.
+
+**Analisis Korelasi.** Variabel `rental_rate` (r = 0.608) dan `total_rental` (r = 0.645) memiliki korelasi positif sedang-kuat dengan revenue. Durasi film tidak memiliki hubungan linear yang bermakna (r ≈ 0). Rendahnya korelasi antar sesama prediktor (r = −0.053) mengkonfirmasi absennya multikolinearitas, yang kemudian dikuatkan oleh nilai VIF ≈ 1 pada analisis regresi.
+
+**Analisis Genre dan ANOVA.** Meskipun genre Sci-Fi unggul secara deskriptif (\$80.6 per film) dan Children terendah (\$63.0), uji ANOVA (F = 0.933, p = 0.527) dan Tukey HSD mengkonfirmasi bahwa tidak ada satu pun pasangan genre yang berbeda secara signifikan. Genre bukan determinan utama revenue film dalam dataset ini.
+
+**Distribusi Geografis.** India (60), China (53), dan Amerika Serikat (36) mendominasi jumlah pelanggan. Lima dari 10 besar berasal dari kawasan Asia, menunjukkan konsentrasi pasar yang kuat di wilayah tersebut.
+
+**Segmentasi K-Means.** Elbow Method dan Silhouette Method keduanya mengonfirmasi k = 2 sebagai jumlah klaster optimal. Dua segmen teridentifikasi: pelanggan dengan frekuensi rendah dan total spending lebih kecil (Klaster 1), dan pelanggan aktif bernilai tinggi (Klaster 2). Model menjelaskan variansi data secara memadai.
+
+**Model Regresi.** Model dengan `rental_rate` dan `total_rental` sebagai prediktor utama menjelaskan 83.1% variasi revenue (R² = 0.831). Variabel `length` tidak signifikan. Heteroskedastisitas terdeteksi dan memerlukan penanganan lebih lanjut untuk validitas inferensi yang sempurna.
+
+## Rekomendasi Strategis
+
+| Area | Rekomendasi |
+|---|---|
+| **Penetapan Harga** | Optimalkan proporsi film bertarif \$4.99 dalam portofolio — setiap kenaikan \$1 tarif memberikan +\$16.59 revenue per film |
+| **Peningkatan Frekuensi** | Terapkan program promosi berbasis frekuensi (diskon kumulatif, paket berlangganan) untuk mendorong `total_rental` |
+| **Retensi Klaster 2** | Prioritaskan program loyalitas untuk pelanggan aktif bernilai tinggi; hindari churn di segmen ini |
+| **Aktivasi Klaster 1 & 2** | Rancang insentif untuk meningkatkan frekuensi kunjungan (Klaster 1) dan nilai transaksi (Klaster 2) |
+| **Ekspansi Geografis** | Fokuskan kampanye pemasaran regional di India, China, dan Asia Tenggara |
+| **Perbaikan Model** | Terapkan HC3 Standard Errors atau lakukan transformasi `log(revenue)` untuk mengatasi heteroskedastisitas |
+
+---
+
+```{r disconnect, include=FALSE}
+dbDisconnect(con)
+```
