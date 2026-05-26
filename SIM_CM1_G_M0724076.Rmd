@@ -1,6 +1,6 @@
 ---
 title: "Analisis Performa Film, Segmentasi Pelanggan, dan Pemodelan Revenue pada Database Sakila"
-author: "Nadia Atikah Dewi"
+author: "Nadia Atikah Dewi (M0724076)"
 date: "`r format(Sys.Date(), '%d %B %Y')`"
 output:
   html_document:
